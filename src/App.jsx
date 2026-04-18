@@ -8,14 +8,18 @@ import AccountPage from './pages/AccountPage'
 import OrdersPage from './pages/OrdersPage'
 import FaqPage from './pages/FaqPage'
 import ContactPage from './pages/ContactPage'
+import {
+  apiFetch,
+  apiUrl,
+  authHeaders,
+  getStoredToken,
+  setStoredToken,
+} from './api/client.js'
 import './App.css'
 
 const CART_STORAGE_KEY = 'novastore-cart-items'
 const WISHLIST_STORAGE_KEY = 'novastore-wishlist'
 const SAVED_STORAGE_KEY = 'novastore-saved-later'
-const AUTH_STORAGE_KEY = 'novastore-auth'
-const ORDERS_STORAGE_KEY = 'novastore-orders'
-
 const readLocalArray = (key) => {
   try {
     const raw = localStorage.getItem(key)
@@ -109,14 +113,10 @@ function App() {
   const [savedForLater, setSavedForLater] = useState(() =>
     readLocalArray(SAVED_STORAGE_KEY),
   )
-  const [orders, setOrders] = useState(() => readLocalArray(ORDERS_STORAGE_KEY))
-  const [isSignedIn, setIsSignedIn] = useState(() => {
-    try {
-      return localStorage.getItem(AUTH_STORAGE_KEY) === 'true'
-    } catch {
-      return false
-    }
-  })
+  const [orders, setOrders] = useState([])
+  const [user, setUser] = useState(null)
+  const [authReady, setAuthReady] = useState(false)
+  const isSignedIn = Boolean(user)
   const [isCartDrawerOpen, setIsCartDrawerOpen] = useState(false)
   const [toast, setToast] = useState(null)
 
@@ -130,11 +130,64 @@ function App() {
     localStorage.setItem(SAVED_STORAGE_KEY, JSON.stringify(savedForLater))
   }, [savedForLater])
   useEffect(() => {
-    localStorage.setItem(ORDERS_STORAGE_KEY, JSON.stringify(orders))
-  }, [orders])
+    try {
+      localStorage.removeItem('novastore-auth')
+    } catch {
+      /* ignore */
+    }
+  }, [])
+
   useEffect(() => {
-    localStorage.setItem(AUTH_STORAGE_KEY, String(isSignedIn))
-  }, [isSignedIn])
+    let cancelled = false
+    async function restoreSession() {
+      const token = getStoredToken()
+      if (!token) {
+        setAuthReady(true)
+        return
+      }
+      try {
+        const res = await fetch(apiUrl('/api/auth/me'), { headers: authHeaders(token) })
+        if (cancelled) return
+        if (res.ok) {
+          const data = await res.json()
+          if (data.user) {
+            setUser(data.user)
+          } else {
+            setStoredToken(null)
+          }
+        } else {
+          setStoredToken(null)
+        }
+      } catch {
+        setStoredToken(null)
+      } finally {
+        if (!cancelled) setAuthReady(true)
+      }
+    }
+    restoreSession()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!authReady || !user) {
+      if (authReady && !user) {
+        setOrders([])
+      }
+      return
+    }
+    let cancelled = false
+    fetch(apiUrl('/api/orders'), { headers: authHeaders() })
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error('Orders unavailable'))))
+      .then((data) => {
+        if (!cancelled && Array.isArray(data)) setOrders(data)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [authReady, user])
   useEffect(() => {
     if (!toast) return
     const timeoutId = setTimeout(() => setToast(null), 2600)
@@ -234,40 +287,82 @@ function App() {
 
   const clearCart = () => setCartItems([])
 
-  const createOrder = () => {
+  const handleAuthSuccess = (payload) => {
+    setUser(payload.user)
+  }
+
+  const handleSignOut = () => {
+    setStoredToken(null)
+    setUser(null)
+    setOrders([])
+  }
+
+  const createOrder = async () => {
     if (!isSignedIn || cartItems.length === 0) {
       return false
     }
     const total = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0)
-    const newOrder = {
-      id: `NS${Date.now().toString().slice(-6)}`,
-      date: new Date().toLocaleDateString(),
-      total,
-      itemsCount: cartItems.reduce((sum, item) => sum + item.quantity, 0),
+    const itemsCount = cartItems.reduce((sum, item) => sum + item.quantity, 0)
+    try {
+      const response = await apiFetch('/api/orders', {
+        method: 'POST',
+        body: JSON.stringify({
+          total,
+          itemsCount,
+          items: cartItems.map(
+            ({ id, name, price, quantity, image }) => ({
+              id,
+              name,
+              price,
+              quantity,
+              image,
+            }),
+          ),
+        }),
+      })
+      if (!response.ok) {
+        throw new Error('Order failed')
+      }
+      const newOrder = await response.json()
+      setOrders((prev) => [newOrder, ...prev])
+      setCartItems([])
+      setToast({ type: 'order', message: `Order ${newOrder.id} placed successfully` })
+      return true
+    } catch {
+      setToast({
+        type: 'cart-remove',
+        message: 'Checkout failed. Start the API with npm run dev:api.',
+      })
+      return false
     }
-    setOrders((prev) => [newOrder, ...prev])
-    setCartItems([])
-    setToast({ type: 'order', message: `Order ${newOrder.id} placed successfully` })
-    return true
   }
 
   return (
     <div className="app-shell">
       <header className="topbar">
-        <Link to="/" className="brand">
-          NovaStore
-        </Link>
-        <nav>
-          <NavLink to="/">Home</NavLink>
-          <NavLink to="/products">Products</NavLink>
-          <NavLink to="/orders">Orders</NavLink>
-          <NavLink to="/faq">FAQ</NavLink>
-          <NavLink to="/contact">Contact</NavLink>
-          <NavLink to="/account">{isSignedIn ? 'Account' : 'Sign In'}</NavLink>
-          <button className="button" onClick={() => setIsCartDrawerOpen(true)}>
-            Cart ({cartCount})
-          </button>
-        </nav>
+        <div className="topbar-inner">
+          <Link to="/" className="brand">
+            <span className="brand-mark" aria-hidden="true">
+              N
+            </span>
+            <span className="brand-text">NovaStore</span>
+          </Link>
+          <nav className="topbar-nav">
+            <NavLink to="/">Home</NavLink>
+            <NavLink to="/products">Products</NavLink>
+            <NavLink to="/orders">Orders</NavLink>
+            <NavLink to="/faq">FAQ</NavLink>
+            <NavLink to="/contact">Contact</NavLink>
+          </nav>
+          <div className="topbar-actions">
+            <NavLink className="account-link" to="/account">
+              {isSignedIn ? 'Account' : 'Sign In'}
+            </NavLink>
+            <button className="button topbar-cart-button" onClick={() => setIsCartDrawerOpen(true)}>
+              Cart ({cartCount})
+            </button>
+          </div>
+        </div>
       </header>
 
       <main>
@@ -324,14 +419,10 @@ function App() {
           <Route
             path="/account"
             element={
-              <AccountPage
-                isSignedIn={isSignedIn}
-                onSignIn={() => setIsSignedIn(true)}
-                onSignOut={() => setIsSignedIn(false)}
-              />
+              <AccountPage user={user} onAuthSuccess={handleAuthSuccess} onSignOut={handleSignOut} />
             }
           />
-          <Route path="/orders" element={<OrdersPage orders={orders} />} />
+          <Route path="/orders" element={<OrdersPage orders={orders} isSignedIn={isSignedIn} />} />
           <Route path="/faq" element={<FaqPage />} />
           <Route path="/contact" element={<ContactPage />} />
         </Routes>

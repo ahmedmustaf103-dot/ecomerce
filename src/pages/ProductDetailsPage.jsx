@@ -1,9 +1,10 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import products from '../data/products.json'
+import { useProducts } from '../hooks/useProducts.js'
 
 function ProductDetailsPage({ onAddToCart, wishlist, onToggleWishlist }) {
   const { productId } = useParams()
+  const { products, loading, error } = useProducts()
   const product = products.find((item) => item.id === productId)
   const [selectedColor, setSelectedColor] = useState('')
   const [selectedSize, setSelectedSize] = useState('')
@@ -21,7 +22,7 @@ function ProductDetailsPage({ onAddToCart, wishlist, onToggleWishlist }) {
       (item) => item.id !== product.id && item.category !== product.category,
     )
     return [...sameCategory, ...other].slice(0, 6)
-  }, [product])
+  }, [product, products])
 
   const carouselRef = useRef(null)
   const scrollCarousel = useCallback((direction) => {
@@ -52,6 +53,34 @@ function ProductDetailsPage({ onAddToCart, wishlist, onToggleWishlist }) {
     ],
     [],
   )
+
+  if (error) {
+    return (
+      <section className="page narrow">
+        <h1>Could not load product</h1>
+        <p className="page-subtitle">{error}</p>
+        <Link to="/" className="button secondary">
+          Back to Home
+        </Link>
+      </section>
+    )
+  }
+
+  if (loading) {
+    return (
+      <section className="page">
+        <article className="details-card">
+          <div className="skeleton-card skeleton-details-image" />
+          <div className="details-content">
+            <div className="skeleton-line skeleton-line-wide" />
+            <div className="skeleton-line" />
+            <div className="skeleton-line" />
+            <div className="skeleton-line skeleton-line-short" />
+          </div>
+        </article>
+      </section>
+    )
+  }
 
   if (!product) {
     return (

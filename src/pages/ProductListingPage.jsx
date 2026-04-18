@@ -1,36 +1,45 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import products from '../data/products.json'
+import { useProducts } from '../hooks/useProducts.js'
 
 function ProductListingPage({ onAddToCart, wishlist, onToggleWishlist }) {
+  const { products, loading, error } = useProducts()
+
   const categories = useMemo(
     () => ['All', ...new Set(products.map((product) => product.category))],
-    [],
+    [products],
   )
-  const maxProductPrice = useMemo(
-    () => Math.ceil(Math.max(...products.map((product) => product.price))),
-    [],
-  )
+  const maxProductPrice = useMemo(() => {
+    if (products.length === 0) return 0
+    return Math.ceil(Math.max(...products.map((product) => product.price)))
+  }, [products])
 
   const [selectedCategory, setSelectedCategory] = useState('All')
-  const [priceRange, setPriceRange] = useState(maxProductPrice)
-  const [isLoading, setIsLoading] = useState(true)
+  const [priceRange, setPriceRange] = useState(null)
 
-  useEffect(() => {
-    const timer = setTimeout(() => setIsLoading(false), 450)
-    return () => clearTimeout(timer)
-  }, [])
+  const filteredProducts = useMemo(() => {
+    const cap = priceRange ?? maxProductPrice
+    return products.filter((product) => {
+      const matchesCategory =
+        selectedCategory === 'All' || product.category === selectedCategory
+      const matchesPrice =
+        maxProductPrice === 0 || cap == null || product.price <= cap
+      return matchesCategory && matchesPrice
+    })
+  }, [products, selectedCategory, priceRange, maxProductPrice])
 
-  const filteredProducts = useMemo(
-    () =>
-      products.filter((product) => {
-        const matchesCategory =
-          selectedCategory === 'All' || product.category === selectedCategory
-        const matchesPrice = product.price <= priceRange
-        return matchesCategory && matchesPrice
-      }),
-    [selectedCategory, priceRange],
-  )
+  if (error) {
+    return (
+      <section className="page">
+        <h1>Products</h1>
+        <div className="empty-state">
+          <p>Could not load products.</p>
+          <p className="page-subtitle">{error}</p>
+          <p className="page-subtitle">Run npm run dev:api alongside the Vite dev server, or use npm run dev:full.</p>
+        </div>
+      </section>
+    )
+  }
 
   return (
     <section className="page">
@@ -45,6 +54,7 @@ function ProductListingPage({ onAddToCart, wishlist, onToggleWishlist }) {
           <select
             value={selectedCategory}
             onChange={(event) => setSelectedCategory(event.target.value)}
+            disabled={loading}
           >
             {categories.map((category) => (
               <option key={category} value={category}>
@@ -55,20 +65,21 @@ function ProductListingPage({ onAddToCart, wishlist, onToggleWishlist }) {
         </label>
 
         <label>
-          Max Price: ${priceRange.toFixed(2)}
+          Max Price: ${(priceRange ?? maxProductPrice).toFixed(2)}
           <input
             type="range"
             min="0"
-            max={maxProductPrice}
+            max={maxProductPrice || 1}
             step="1"
-            value={priceRange}
+            value={priceRange ?? maxProductPrice}
             onChange={(event) => setPriceRange(Number(event.target.value))}
+            disabled={loading || maxProductPrice === 0}
           />
         </label>
       </div>
 
       <div className="product-grid">
-        {isLoading
+        {loading
           ? Array.from({ length: 6 }).map((_, index) => (
               <article className="product-card skeleton-card" key={`skeleton-${index}`} />
             ))
@@ -110,7 +121,7 @@ function ProductListingPage({ onAddToCart, wishlist, onToggleWishlist }) {
             ))}
       </div>
 
-      {filteredProducts.length === 0 ? (
+      {!loading && filteredProducts.length === 0 ? (
         <p className="page-subtitle">No products match the selected filters.</p>
       ) : null}
     </section>

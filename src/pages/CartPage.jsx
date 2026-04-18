@@ -94,13 +94,15 @@ function CartPage({
             </button>
             <button
               className="button"
-              onClick={() => {
-                const checkedOut = onCheckout()
+              onClick={async () => {
+                const checkedOut = await onCheckout()
                 if (checkedOut) {
                   navigate('/orders')
                   return
                 }
-                navigate('/account')
+                if (!isSignedIn) {
+                  navigate('/account')
+                }
               }}
             >
               {isSignedIn ? 'Checkout' : 'Sign in to Checkout'}
@@ -137,7 +139,7 @@ function CartPage({
 
       {!isSignedIn ? (
         <p className="page-subtitle">
-          Want to checkout? <Link to="/account">Sign in to your demo account</Link>.
+          Want to checkout? <Link to="/account">Create an account or sign in</Link>.
         </p>
       ) : null}
     </section>
