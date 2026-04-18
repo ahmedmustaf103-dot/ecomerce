@@ -14,16 +14,33 @@ export function ProductsProvider({ children }) {
       setError(null)
     }
     fetch(apiUrl('/api/products'))
-      .then((res) => {
-        if (!res.ok) throw new Error('Failed to load products')
-        return res.json()
+      .then(async (res) => {
+        if (res.ok) {
+          return res.json()
+        }
+        const fallback = await fetch('/products.json')
+        if (!fallback.ok) {
+          throw new Error('Failed to load products')
+        }
+        return fallback.json()
       })
       .then((data) => {
         setProducts(Array.isArray(data) ? data : [])
         autoRetriedRef.current = false
       })
-      .catch((err) => {
-        setError(err.message || 'Something went wrong')
+      .catch(async (err) => {
+        try {
+          const fallback = await fetch('/products.json')
+          if (!fallback.ok) {
+            throw err
+          }
+          const data = await fallback.json()
+          setProducts(Array.isArray(data) ? data : [])
+          setError(null)
+          autoRetriedRef.current = false
+        } catch {
+          setError(err.message || 'Something went wrong')
+        }
       })
       .finally(() => {
         setLoading(false)
