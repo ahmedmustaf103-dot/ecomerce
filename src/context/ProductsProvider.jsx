@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { apiUrl } from '../api/client.js'
 import { ProductsContext } from './productsContext.js'
 
@@ -6,6 +6,7 @@ export function ProductsProvider({ children }) {
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const autoRetriedRef = useRef(false)
 
   const fetchProducts = useCallback((isManualRetry) => {
     if (isManualRetry) {
@@ -19,6 +20,7 @@ export function ProductsProvider({ children }) {
       })
       .then((data) => {
         setProducts(Array.isArray(data) ? data : [])
+        autoRetriedRef.current = false
       })
       .catch((err) => {
         setError(err.message || 'Something went wrong')
@@ -34,6 +36,15 @@ export function ProductsProvider({ children }) {
     }, 0)
     return () => clearTimeout(timeoutId)
   }, [fetchProducts])
+
+  useEffect(() => {
+    if (loading || !error || autoRetriedRef.current) return undefined
+    autoRetriedRef.current = true
+    const timeoutId = setTimeout(() => {
+      fetchProducts(true)
+    }, 900)
+    return () => clearTimeout(timeoutId)
+  }, [loading, error, fetchProducts])
 
   const retry = useCallback(() => {
     fetchProducts(true)
