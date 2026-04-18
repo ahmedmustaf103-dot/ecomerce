@@ -1,10 +1,9 @@
 import { useMemo } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 
 function CartPage({
   cartItems,
   savedForLater,
-  isSignedIn,
   onIncrement,
   onDecrement,
   onUpdateQuantity,
@@ -98,14 +97,10 @@ function CartPage({
                 const checkedOut = await onCheckout()
                 if (checkedOut) {
                   navigate('/orders')
-                  return
-                }
-                if (!isSignedIn) {
-                  navigate('/account')
                 }
               }}
             >
-              {isSignedIn ? 'Checkout' : 'Sign in to Checkout'}
+              Checkout
             </button>
           </div>
         </>
@@ -137,11 +132,6 @@ function CartPage({
         </div>
       ) : null}
 
-      {!isSignedIn ? (
-        <p className="page-subtitle">
-          Want to checkout? <Link to="/account">Create an account or sign in</Link>.
-        </p>
-      ) : null}
     </section>
   )
 }

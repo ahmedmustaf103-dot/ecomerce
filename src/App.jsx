@@ -8,13 +8,6 @@ import AccountPage from './pages/AccountPage'
 import OrdersPage from './pages/OrdersPage'
 import FaqPage from './pages/FaqPage'
 import ContactPage from './pages/ContactPage'
-import {
-  apiFetch,
-  apiUrl,
-  authHeaders,
-  getStoredToken,
-  setStoredToken,
-} from './api/client.js'
 import './App.css'
 
 const CART_STORAGE_KEY = 'novastore-cart-items'
@@ -114,9 +107,6 @@ function App() {
     readLocalArray(SAVED_STORAGE_KEY),
   )
   const [orders, setOrders] = useState([])
-  const [user, setUser] = useState(null)
-  const [authReady, setAuthReady] = useState(false)
-  const isSignedIn = Boolean(user)
   const [isCartDrawerOpen, setIsCartDrawerOpen] = useState(false)
   const [toast, setToast] = useState(null)
 
@@ -129,65 +119,6 @@ function App() {
   useEffect(() => {
     localStorage.setItem(SAVED_STORAGE_KEY, JSON.stringify(savedForLater))
   }, [savedForLater])
-  useEffect(() => {
-    try {
-      localStorage.removeItem('novastore-auth')
-    } catch {
-      /* ignore */
-    }
-  }, [])
-
-  useEffect(() => {
-    let cancelled = false
-    async function restoreSession() {
-      const token = getStoredToken()
-      if (!token) {
-        setAuthReady(true)
-        return
-      }
-      try {
-        const res = await fetch(apiUrl('/api/auth/me'), { headers: authHeaders(token) })
-        if (cancelled) return
-        if (res.ok) {
-          const data = await res.json()
-          if (data.user) {
-            setUser(data.user)
-          } else {
-            setStoredToken(null)
-          }
-        } else {
-          setStoredToken(null)
-        }
-      } catch {
-        setStoredToken(null)
-      } finally {
-        if (!cancelled) setAuthReady(true)
-      }
-    }
-    restoreSession()
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!authReady || !user) {
-      if (authReady && !user) {
-        setOrders([])
-      }
-      return
-    }
-    let cancelled = false
-    fetch(apiUrl('/api/orders'), { headers: authHeaders() })
-      .then((res) => (res.ok ? res.json() : Promise.reject(new Error('Orders unavailable'))))
-      .then((data) => {
-        if (!cancelled && Array.isArray(data)) setOrders(data)
-      })
-      .catch(() => {})
-    return () => {
-      cancelled = true
-    }
-  }, [authReady, user])
   useEffect(() => {
     if (!toast) return
     const timeoutId = setTimeout(() => setToast(null), 2600)
@@ -287,54 +218,29 @@ function App() {
 
   const clearCart = () => setCartItems([])
 
-  const handleAuthSuccess = (payload) => {
-    setUser(payload.user)
-  }
-
-  const handleSignOut = () => {
-    setStoredToken(null)
-    setUser(null)
-    setOrders([])
-  }
-
   const createOrder = async () => {
-    if (!isSignedIn || cartItems.length === 0) {
+    if (cartItems.length === 0) {
       return false
     }
     const total = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0)
     const itemsCount = cartItems.reduce((sum, item) => sum + item.quantity, 0)
-    try {
-      const response = await apiFetch('/api/orders', {
-        method: 'POST',
-        body: JSON.stringify({
-          total,
-          itemsCount,
-          items: cartItems.map(
-            ({ id, name, price, quantity, image }) => ({
-              id,
-              name,
-              price,
-              quantity,
-              image,
-            }),
-          ),
-        }),
-      })
-      if (!response.ok) {
-        throw new Error('Order failed')
-      }
-      const newOrder = await response.json()
-      setOrders((prev) => [newOrder, ...prev])
-      setCartItems([])
-      setToast({ type: 'order', message: `Order ${newOrder.id} placed successfully` })
-      return true
-    } catch {
-      setToast({
-        type: 'cart-remove',
-        message: 'Checkout failed. Start the API with npm run dev:api.',
-      })
-      return false
+    const newOrder = {
+      id: `NS${Date.now().toString().slice(-6)}`,
+      date: new Date().toLocaleDateString(),
+      total,
+      itemsCount,
+      items: cartItems.map(({ id, name, price, quantity, image }) => ({
+        id,
+        name,
+        price,
+        quantity,
+        image,
+      })),
     }
+    setOrders((prev) => [newOrder, ...prev])
+    setCartItems([])
+    setToast({ type: 'order', message: `Order ${newOrder.id} placed successfully` })
+    return true
   }
 
   return (
@@ -355,9 +261,6 @@ function App() {
             <NavLink to="/contact">Contact</NavLink>
           </nav>
           <div className="topbar-actions">
-            <NavLink className="account-link" to="/account">
-              {isSignedIn ? 'Account' : 'Sign In'}
-            </NavLink>
             <button className="button topbar-cart-button" onClick={() => setIsCartDrawerOpen(true)}>
               Cart ({cartCount})
             </button>
@@ -403,7 +306,6 @@ function App() {
               <CartPage
                 cartItems={cartItems}
                 savedForLater={savedForLater}
-                isSignedIn={isSignedIn}
                 onIncrement={incrementItem}
                 onDecrement={decrementItem}
                 onUpdateQuantity={updateItemQuantity}
@@ -418,11 +320,9 @@ function App() {
           />
           <Route
             path="/account"
-            element={
-              <AccountPage user={user} onAuthSuccess={handleAuthSuccess} onSignOut={handleSignOut} />
-            }
+            element={<AccountPage />}
           />
-          <Route path="/orders" element={<OrdersPage orders={orders} isSignedIn={isSignedIn} />} />
+          <Route path="/orders" element={<OrdersPage orders={orders} />} />
           <Route path="/faq" element={<FaqPage />} />
           <Route path="/contact" element={<ContactPage />} />
         </Routes>

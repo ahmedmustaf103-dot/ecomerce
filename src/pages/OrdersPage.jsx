@@ -1,19 +1,12 @@
 import { Link } from 'react-router-dom'
 
-function OrdersPage({ orders, isSignedIn }) {
+function OrdersPage({ orders }) {
   return (
     <section className="page">
       <h1>Order History</h1>
-      <p className="page-subtitle">Orders placed while you are signed in.</p>
+      <p className="page-subtitle">Orders created in your current browser session.</p>
 
-      {!isSignedIn ? (
-        <div className="empty-state">
-          <p>Sign in to see your orders.</p>
-          <p>
-            <Link to="/account">Go to Account</Link> to register or sign in.
-          </p>
-        </div>
-      ) : orders.length === 0 ? (
+      {orders.length === 0 ? (
         <div className="empty-state">
           <p>No orders yet.</p>
           <p>Complete checkout from the cart to create your first order.</p>
@@ -32,6 +25,10 @@ function OrdersPage({ orders, isSignedIn }) {
           ))}
         </div>
       )}
+
+      <p className="page-subtitle">
+        <Link to="/products">Continue shopping</Link>
+      </p>
     </section>
   )
 }
