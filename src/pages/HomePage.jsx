@@ -53,7 +53,7 @@ function ProductCard({ product, onAddToCart, onToggleWishlist, wishlist }) {
 }
 
 function HomePage({ onAddToCart, wishlist, onToggleWishlist }) {
-  const { products, loading, error } = useProducts()
+  const { products, loading, error, retry } = useProducts()
 
   const homeData = useMemo(() => {
     if (products.length === 0) {
@@ -162,6 +162,9 @@ function HomePage({ onAddToCart, wishlist, onToggleWishlist }) {
           <p>Could not load products.</p>
           <p className="page-subtitle">{error}</p>
           <p className="page-subtitle">Start the API server with npm run dev:api, or use npm run dev:full.</p>
+          <button className="button secondary" onClick={retry} type="button">
+            Retry
+          </button>
         </div>
       </section>
     )
