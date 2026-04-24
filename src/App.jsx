@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, NavLink, Route, Routes } from 'react-router-dom'
+import { onAuthStateChanged, signOut } from 'firebase/auth'
+import { addDoc, collection, getDocs, orderBy, query, serverTimestamp, where } from 'firebase/firestore'
 import HomePage from './pages/HomePage'
 import ProductListingPage from './pages/ProductListingPage'
 import ProductDetailsPage from './pages/ProductDetailsPage'
@@ -8,6 +10,7 @@ import AccountPage from './pages/AccountPage'
 import OrdersPage from './pages/OrdersPage'
 import FaqPage from './pages/FaqPage'
 import ContactPage from './pages/ContactPage'
+import { auth, db, firebaseConfigured } from './firebase/config.js'
 import './App.css'
 
 const CART_STORAGE_KEY = 'novastore-cart-items'
@@ -107,6 +110,9 @@ function App() {
     readLocalArray(SAVED_STORAGE_KEY),
   )
   const [orders, setOrders] = useState([])
+  const [user, setUser] = useState(null)
+  const [authReady, setAuthReady] = useState(() => !firebaseConfigured)
+  const isSignedIn = Boolean(user)
   const [isCartDrawerOpen, setIsCartDrawerOpen] = useState(false)
   const [toast, setToast] = useState(null)
 
@@ -124,6 +130,55 @@ function App() {
     const timeoutId = setTimeout(() => setToast(null), 2600)
     return () => clearTimeout(timeoutId)
   }, [toast])
+
+  useEffect(() => {
+    if (!firebaseConfigured || !auth) {
+      return () => {}
+    }
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      if (firebaseUser) {
+        setUser({ id: firebaseUser.uid, email: firebaseUser.email ?? '' })
+      } else {
+        setUser(null)
+        setOrders([])
+      }
+      setAuthReady(true)
+    })
+    return unsubscribe
+  }, [])
+
+  useEffect(() => {
+    if (!firebaseConfigured || !authReady || !db || !user) {
+      return () => {}
+    }
+    let cancelled = false
+    const ordersQuery = query(
+      collection(db, 'orders'),
+      where('userId', '==', user.id),
+      orderBy('createdAt', 'desc'),
+    )
+    getDocs(ordersQuery)
+      .then((snapshot) => {
+        if (cancelled) return
+        const list = snapshot.docs.map((docSnap) => {
+          const data = docSnap.data()
+          return {
+            id: docSnap.id,
+            date: data.date,
+            total: data.total,
+            itemsCount: data.itemsCount,
+            items: Array.isArray(data.items) ? data.items : [],
+          }
+        })
+        setOrders(list)
+      })
+      .catch(() => {
+        if (!cancelled) setOrders([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [authReady, user])
 
   const cartCount = useMemo(
     () => cartItems.reduce((sum, item) => sum + item.quantity, 0),
@@ -218,24 +273,79 @@ function App() {
 
   const clearCart = () => setCartItems([])
 
+  const handleSignOut = async () => {
+    if (auth) {
+      try {
+        await signOut(auth)
+      } catch {
+        /* ignore */
+      }
+    }
+    setUser(null)
+    if (firebaseConfigured) {
+      setOrders([])
+    }
+  }
+
   const createOrder = async () => {
     if (cartItems.length === 0) {
       return false
     }
     const total = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0)
     const itemsCount = cartItems.reduce((sum, item) => sum + item.quantity, 0)
+    const date = new Date().toLocaleDateString()
+    const lineItems = cartItems.map(({ id, name, price, quantity, image }) => ({
+      id,
+      name,
+      price,
+      quantity,
+      image,
+    }))
+
+    if (firebaseConfigured && db && auth) {
+      const currentUser = auth.currentUser
+      if (!currentUser) {
+        setToast({
+          type: 'cart-remove',
+          message: 'Sign in to place an order.',
+        })
+        return false
+      }
+      try {
+        const docRef = await addDoc(collection(db, 'orders'), {
+          userId: currentUser.uid,
+          date,
+          total,
+          itemsCount,
+          items: lineItems,
+          createdAt: serverTimestamp(),
+        })
+        const newOrder = {
+          id: docRef.id,
+          date,
+          total,
+          itemsCount,
+          items: lineItems,
+        }
+        setOrders((prev) => [newOrder, ...prev])
+        setCartItems([])
+        setToast({ type: 'order', message: `Order ${newOrder.id} placed successfully` })
+        return true
+      } catch {
+        setToast({
+          type: 'cart-remove',
+          message: 'Checkout failed. Check Firestore rules and your Firebase project.',
+        })
+        return false
+      }
+    }
+
     const newOrder = {
       id: `NS${Date.now().toString().slice(-6)}`,
-      date: new Date().toLocaleDateString(),
+      date,
       total,
       itemsCount,
-      items: cartItems.map(({ id, name, price, quantity, image }) => ({
-        id,
-        name,
-        price,
-        quantity,
-        image,
-      })),
+      items: lineItems,
     }
     setOrders((prev) => [newOrder, ...prev])
     setCartItems([])
@@ -261,6 +371,11 @@ function App() {
             <NavLink to="/contact">Contact</NavLink>
           </nav>
           <div className="topbar-actions">
+            {firebaseConfigured ? (
+              <NavLink className="account-link" to="/account">
+                {isSignedIn ? 'Account' : 'Sign In'}
+              </NavLink>
+            ) : null}
             <button className="button topbar-cart-button" onClick={() => setIsCartDrawerOpen(true)}>
               Cart ({cartCount})
             </button>
@@ -306,6 +421,7 @@ function App() {
               <CartPage
                 cartItems={cartItems}
                 savedForLater={savedForLater}
+                isSignedIn={isSignedIn}
                 onIncrement={incrementItem}
                 onDecrement={decrementItem}
                 onUpdateQuantity={updateItemQuantity}
@@ -318,11 +434,8 @@ function App() {
               />
             }
           />
-          <Route
-            path="/account"
-            element={<AccountPage />}
-          />
-          <Route path="/orders" element={<OrdersPage orders={orders} />} />
+          <Route path="/account" element={<AccountPage user={user} onSignOut={handleSignOut} />} />
+          <Route path="/orders" element={<OrdersPage orders={orders} user={user} />} />
           <Route path="/faq" element={<FaqPage />} />
           <Route path="/contact" element={<ContactPage />} />
         </Routes>

@@ -1,0 +1,22 @@
+rules_version = '2';
+
+// Deploy: firebase deploy --only firestore:rules
+// Create composite index when prompted: orders — userId ASC, createdAt DESC
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /orders/{orderId} {
+      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.keys().hasAll(['userId', 'date', 'total', 'itemsCount', 'items', 'createdAt'])
+        && request.resource.data.items is list;
+      allow update, delete: if false;
+    }
+  }
+}

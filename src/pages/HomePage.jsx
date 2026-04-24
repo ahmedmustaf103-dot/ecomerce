@@ -161,7 +161,11 @@ function HomePage({ onAddToCart, wishlist, onToggleWishlist }) {
         <div className="empty-state">
           <p>Could not load products.</p>
           <p className="page-subtitle">{error}</p>
-          <p className="page-subtitle">Start the API server with npm run dev:api, or use npm run dev:full.</p>
+          <p className="page-subtitle">
+            With Firebase: add web app keys to <code>.env</code>, deploy <code>firestore.rules</code>, and run{' '}
+            <code>npm run seed:firestore</code>. Without Firebase: run <code>npm run dev:api</code> or{' '}
+            <code>npm run dev:full</code>.
+          </p>
           <button className="button secondary" onClick={retry} type="button">
             Retry
           </button>

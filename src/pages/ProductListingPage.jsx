@@ -35,7 +35,10 @@ function ProductListingPage({ onAddToCart, wishlist, onToggleWishlist }) {
         <div className="empty-state">
           <p>Could not load products.</p>
           <p className="page-subtitle">{error}</p>
-          <p className="page-subtitle">Run npm run dev:api alongside the Vite dev server, or use npm run dev:full.</p>
+          <p className="page-subtitle">
+            With Firebase: configure <code>.env</code> and seed Firestore. Otherwise run the local API (
+            <code>npm run dev:api</code> or <code>npm run dev:full</code>).
+          </p>
         </div>
       </section>
     )

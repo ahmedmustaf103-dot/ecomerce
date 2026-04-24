@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { collection, getDocs } from 'firebase/firestore'
 import { apiUrl } from '../api/client.js'
+import { db, firebaseConfigured } from '../firebase/config.js'
+import { productFromFirestore } from '../lib/productFromFirestore.js'
 import { ProductsContext } from './productsContext.js'
 
 export function ProductsProvider({ children }) {
@@ -13,6 +16,30 @@ export function ProductsProvider({ children }) {
       setLoading(true)
       setError(null)
     }
+
+    if (firebaseConfigured && db) {
+      getDocs(collection(db, 'products'))
+        .then((snapshot) => {
+          const list = snapshot.docs
+            .map((docSnap) => productFromFirestore(docSnap.id, docSnap.data()))
+            .filter(Boolean)
+          list.sort((a, b) => a.id.localeCompare(b.id))
+          setProducts(list)
+          autoRetriedRef.current = false
+        })
+        .catch((err) => {
+          const message =
+            err?.code === 'permission-denied'
+              ? 'Firestore permission denied. Deploy firestore.rules and seed products.'
+              : err?.message || 'Something went wrong'
+          setError(message)
+        })
+        .finally(() => {
+          setLoading(false)
+        })
+      return
+    }
+
     fetch(apiUrl('/api/products'))
       .then(async (res) => {
         if (res.ok) {

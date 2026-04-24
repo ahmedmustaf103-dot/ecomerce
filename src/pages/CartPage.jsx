@@ -1,9 +1,11 @@
 import { useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
+import { firebaseConfigured } from '../firebase/config.js'
 
 function CartPage({
   cartItems,
   savedForLater,
+  isSignedIn,
   onIncrement,
   onDecrement,
   onUpdateQuantity,
@@ -97,10 +99,14 @@ function CartPage({
                 const checkedOut = await onCheckout()
                 if (checkedOut) {
                   navigate('/orders')
+                  return
+                }
+                if (firebaseConfigured && !isSignedIn) {
+                  navigate('/account')
                 }
               }}
             >
-              Checkout
+              {firebaseConfigured && !isSignedIn ? 'Sign in to Checkout' : 'Checkout'}
             </button>
           </div>
         </>
@@ -132,6 +138,11 @@ function CartPage({
         </div>
       ) : null}
 
+      {firebaseConfigured && !isSignedIn ? (
+        <p className="page-subtitle">
+          Want to save orders to your account? <Link to="/account">Create an account or sign in</Link>.
+        </p>
+      ) : null}
     </section>
   )
 }

@@ -33,3 +33,7 @@ server/data/users.json
 
 # Local env (secrets, DATABASE_URL)
 .env
+
+# Firebase service account keys (never commit)
+*-firebase-adminsdk-*.json
+serviceAccount*.json

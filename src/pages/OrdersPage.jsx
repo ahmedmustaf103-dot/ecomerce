@@ -1,12 +1,26 @@
 import { Link } from 'react-router-dom'
+import { firebaseConfigured } from '../firebase/config.js'
 
-function OrdersPage({ orders }) {
+function OrdersPage({ orders, user }) {
+  const subtitle = firebaseConfigured
+    ? user
+      ? 'Orders saved to your account in Firestore.'
+      : 'Sign in to load your order history.'
+    : 'Orders created in your current browser session (not saved after refresh).'
+
   return (
     <section className="page">
       <h1>Order History</h1>
-      <p className="page-subtitle">Orders created in your current browser session.</p>
+      <p className="page-subtitle">{subtitle}</p>
 
-      {orders.length === 0 ? (
+      {firebaseConfigured && !user ? (
+        <div className="empty-state">
+          <p>Sign in to see your orders.</p>
+          <p>
+            <Link to="/account">Go to Account</Link> to register or sign in.
+          </p>
+        </div>
+      ) : orders.length === 0 ? (
         <div className="empty-state">
           <p>No orders yet.</p>
           <p>Complete checkout from the cart to create your first order.</p>
