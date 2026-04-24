@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { collection, getDocs } from 'firebase/firestore'
-import { apiUrl } from '../api/client.js'
-import { db, firebaseConfigured } from '../firebase/config.js'
+import { db, firebaseConfigured } from '../firebase.js'
 import { productFromFirestore } from '../lib/productFromFirestore.js'
 import { ProductsContext } from './productsContext.js'
 
@@ -9,90 +8,71 @@ export function ProductsProvider({ children }) {
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const autoRetriedRef = useRef(false)
+  const [reloadKey, setReloadKey] = useState(0)
 
-  const fetchProducts = useCallback((isManualRetry) => {
-    if (isManualRetry) {
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadProducts() {
+      if (!firebaseConfigured || !db) {
+        setError(
+          'Firebase is not configured. Add VITE_FIREBASE_API_KEY and VITE_FIREBASE_PROJECT_ID (and other web app keys) to .env — see .env.example.',
+        )
+        setProducts([])
+        setLoading(false)
+        return
+      }
+
       setLoading(true)
       setError(null)
-    }
 
-    if (firebaseConfigured && db) {
-      getDocs(collection(db, 'products'))
-        .then((snapshot) => {
-          const list = snapshot.docs
-            .map((docSnap) => productFromFirestore(docSnap.id, docSnap.data()))
-            .filter(Boolean)
-          list.sort((a, b) => a.id.localeCompare(b.id))
-          setProducts(list)
-          autoRetriedRef.current = false
-        })
-        .catch((err) => {
-          const message =
-            err?.code === 'permission-denied'
-              ? 'Firestore permission denied. Deploy firestore.rules and seed products.'
-              : err?.message || 'Something went wrong'
-          setError(message)
-        })
-        .finally(() => {
-          setLoading(false)
-        })
-      return
-    }
+      try {
+        const snapshot = await getDocs(collection(db, 'products'))
+        if (cancelled) return
 
-    fetch(apiUrl('/api/products'))
-      .then(async (res) => {
-        if (res.ok) {
-          return res.json()
-        }
-        const fallback = await fetch('/products.json')
-        if (!fallback.ok) {
-          throw new Error('Failed to load products')
-        }
-        return fallback.json()
-      })
-      .then((data) => {
-        setProducts(Array.isArray(data) ? data : [])
-        autoRetriedRef.current = false
-      })
-      .catch(async (err) => {
-        try {
-          const fallback = await fetch('/products.json')
-          if (!fallback.ok) {
-            throw err
-          }
-          const data = await fallback.json()
-          setProducts(Array.isArray(data) ? data : [])
+        const list = snapshot.docs
+          .map((docSnap) => {
+            const id = docSnap.id
+            const data = docSnap.data()
+            return productFromFirestore(id, data)
+          })
+          .filter(Boolean)
+
+        list.sort((a, b) => a.id.localeCompare(b.id))
+        if (list.length === 0) {
+          setError(
+            'No products found in the Firestore `products` collection. Seed them: set GOOGLE_APPLICATION_CREDENTIALS to your service account JSON, then run npm run seed:firestore.',
+          )
+        } else {
           setError(null)
-          autoRetriedRef.current = false
-        } catch {
-          setError(err.message || 'Something went wrong')
         }
-      })
-      .finally(() => {
+        setProducts(list)
+      } catch (err) {
+        if (cancelled) return
+        const message =
+          err?.code === 'permission-denied'
+            ? 'Firestore permission denied. In Firebase Console → Firestore → Rules, allow public read on `products` (see firestore.rules in this repo), then Publish.'
+            : err?.code === 'failed-precondition'
+              ? 'Firestore may not be enabled for this project, or the database is unavailable.'
+              : err?.message || 'Something went wrong'
+        setError(message)
+        setProducts([])
+      } finally {
+        // Always clear loading (avoids stuck spinner when React Strict Mode aborts an in-flight request).
         setLoading(false)
-      })
-  }, [])
+      }
+    }
 
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      fetchProducts(false)
-    }, 0)
-    return () => clearTimeout(timeoutId)
-  }, [fetchProducts])
+    loadProducts()
 
-  useEffect(() => {
-    if (loading || !error || autoRetriedRef.current) return undefined
-    autoRetriedRef.current = true
-    const timeoutId = setTimeout(() => {
-      fetchProducts(true)
-    }, 900)
-    return () => clearTimeout(timeoutId)
-  }, [loading, error, fetchProducts])
+    return () => {
+      cancelled = true
+    }
+  }, [reloadKey])
 
   const retry = useCallback(() => {
-    fetchProducts(true)
-  }, [fetchProducts])
+    setReloadKey((key) => key + 1)
+  }, [])
 
   const value = useMemo(
     () => ({ products, loading, error, retry }),

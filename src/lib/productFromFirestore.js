@@ -11,8 +11,24 @@ export function productFromFirestore(docId, data) {
     launchedAt = launchedAt.toISOString()
   }
 
-  const colors = Array.isArray(data.colors) ? data.colors : []
-  const sizes = Array.isArray(data.sizes) ? data.sizes : []
+  let colors = data.colors
+  let sizes = data.sizes
+  if (typeof colors === 'string') {
+    try {
+      colors = JSON.parse(colors)
+    } catch {
+      colors = []
+    }
+  }
+  if (typeof sizes === 'string') {
+    try {
+      sizes = JSON.parse(sizes)
+    } catch {
+      sizes = []
+    }
+  }
+  if (!Array.isArray(colors)) colors = []
+  if (!Array.isArray(sizes)) sizes = []
 
   return {
     id: docId,

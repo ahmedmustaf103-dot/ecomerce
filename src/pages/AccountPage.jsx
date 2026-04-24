@@ -7,12 +7,13 @@ import {
   signInWithEmailAndPassword,
   signInWithPopup,
 } from 'firebase/auth'
-import { auth, firebaseConfigured } from '../firebase/config.js'
+import { auth, firebaseConfigured } from '../firebase.js'
 
 const googleProvider = new GoogleAuthProvider()
 googleProvider.setCustomParameters({ prompt: 'select_account' })
 
-function mapAuthError(code) {
+function mapAuthError(err) {
+  const code = err?.code
   switch (code) {
     case 'auth/email-already-in-use':
       return 'An account with this email already exists'
@@ -24,6 +25,10 @@ function mapAuthError(code) {
     case 'auth/user-not-found':
     case 'auth/wrong-password':
       return 'Invalid email or password'
+    case 'auth/operation-not-allowed':
+      return 'This sign-in method is disabled in Firebase. In Firebase Console → Authentication → Sign-in method, enable Email/Password and/or Google.'
+    case 'auth/network-request-failed':
+      return 'Network error. Check your connection and try again.'
     case 'auth/popup-blocked':
       return 'Pop-up was blocked. Allow pop-ups for this site and try again.'
     case 'auth/popup-closed-by-user':
@@ -34,7 +39,9 @@ function mapAuthError(code) {
     case 'auth/too-many-requests':
       return 'Too many attempts. Wait a few minutes and try again.'
     default:
-      return 'Something went wrong'
+      return code
+        ? `Sign-in failed (${code}). ${err?.message || ''}`.trim()
+        : err?.message || 'Something went wrong'
   }
 }
 
@@ -89,7 +96,7 @@ function AccountPage({ user, onSignOut }) {
       }
       setPassword('')
     } catch (err) {
-      setError(mapAuthError(err?.code))
+      setError(mapAuthError(err))
     } finally {
       setLoading(false)
     }
@@ -102,7 +109,7 @@ function AccountPage({ user, onSignOut }) {
     try {
       await signInWithPopup(auth, googleProvider)
     } catch (err) {
-      setError(mapAuthError(err?.code))
+      setError(mapAuthError(err))
     } finally {
       setGoogleLoading(false)
     }
@@ -121,7 +128,7 @@ function AccountPage({ user, onSignOut }) {
       await sendPasswordResetEmail(auth, trimmed)
       setResetMessage('Check your inbox for a reset link.')
     } catch (err) {
-      setError(mapAuthError(err?.code))
+      setError(mapAuthError(err))
     } finally {
       setResetLoading(false)
     }
@@ -137,7 +144,7 @@ function AccountPage({ user, onSignOut }) {
       await sendEmailVerification(u)
       setVerifyMessage('Verification email sent again.')
     } catch (err) {
-      setError(mapAuthError(err?.code))
+      setError(mapAuthError(err))
     } finally {
       setVerifyLoading(false)
     }
