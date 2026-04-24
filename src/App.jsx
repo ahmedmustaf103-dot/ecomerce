@@ -375,11 +375,9 @@ function App() {
             <NavLink to="/contact">Contact</NavLink>
           </nav>
           <div className="topbar-actions">
-            {firebaseConfigured ? (
-              <NavLink className="account-link" to="/account">
-                {isSignedIn ? 'Account' : 'Sign In'}
-              </NavLink>
-            ) : null}
+            <NavLink className="account-link" to="/account">
+              {firebaseConfigured ? (isSignedIn ? 'Account' : 'Sign In') : 'Account'}
+            </NavLink>
             <button className="button topbar-cart-button" onClick={() => setIsCartDrawerOpen(true)}>
               Cart ({cartCount})
             </button>

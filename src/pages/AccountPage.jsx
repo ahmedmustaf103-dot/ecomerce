@@ -55,8 +55,14 @@ function AccountPage({ user, onSignOut }) {
       <section className="page narrow">
         <h1>Account</h1>
         <div className="empty-state">
-          <p>Firebase is not configured for this deployment.</p>
-          <p>Add your web app keys to <code>.env</code> (see <code>.env.example</code>).</p>
+          <p>Firebase is not configured yet, so Google sign-in, email/password, and password reset are hidden.</p>
+          <p>
+            Add the <code>VITE_FIREBASE_*</code> keys from the Firebase console to <code>.env</code> (see{' '}
+            <code>.env.example</code>), restart <code>npm run dev</code>, then return here.
+          </p>
+          <p className="page-subtitle">
+            On Vercel, add the same variables under Project Settings → Environment Variables and redeploy.
+          </p>
         </div>
       </section>
     )
