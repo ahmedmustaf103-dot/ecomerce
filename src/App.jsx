@@ -137,7 +137,11 @@ function App() {
     }
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       if (firebaseUser) {
-        setUser({ id: firebaseUser.uid, email: firebaseUser.email ?? '' })
+        setUser({
+          id: firebaseUser.uid,
+          email: firebaseUser.email ?? '',
+          emailVerified: firebaseUser.emailVerified,
+        })
       } else {
         setUser(null)
         setOrders([])

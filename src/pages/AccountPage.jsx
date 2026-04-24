@@ -1,9 +1,16 @@
 import { useState } from 'react'
 import {
   createUserWithEmailAndPassword,
+  GoogleAuthProvider,
+  sendEmailVerification,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
+  signInWithPopup,
 } from 'firebase/auth'
 import { auth, firebaseConfigured } from '../firebase/config.js'
+
+const googleProvider = new GoogleAuthProvider()
+googleProvider.setCustomParameters({ prompt: 'select_account' })
 
 function mapAuthError(code) {
   switch (code) {
@@ -17,6 +24,15 @@ function mapAuthError(code) {
     case 'auth/user-not-found':
     case 'auth/wrong-password':
       return 'Invalid email or password'
+    case 'auth/popup-blocked':
+      return 'Pop-up was blocked. Allow pop-ups for this site and try again.'
+    case 'auth/popup-closed-by-user':
+    case 'auth/cancelled-popup-request':
+      return 'Sign-in was cancelled.'
+    case 'auth/account-exists-with-different-credential':
+      return 'An account already exists with this email using a different sign-in method.'
+    case 'auth/too-many-requests':
+      return 'Too many attempts. Wait a few minutes and try again.'
     default:
       return 'Something went wrong'
   }
@@ -28,6 +44,11 @@ function AccountPage({ user, onSignOut }) {
   const [password, setPassword] = useState('')
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
+  const [resetLoading, setResetLoading] = useState(false)
+  const [resetMessage, setResetMessage] = useState(null)
+  const [verifyLoading, setVerifyLoading] = useState(false)
+  const [verifyMessage, setVerifyMessage] = useState(null)
 
   if (!firebaseConfigured || !auth) {
     return (
@@ -48,7 +69,15 @@ function AccountPage({ user, onSignOut }) {
     const trimmed = email.trim()
     try {
       if (mode === 'register') {
-        await createUserWithEmailAndPassword(auth, trimmed, password)
+        const cred = await createUserWithEmailAndPassword(auth, trimmed, password)
+        if (cred.user && !cred.user.emailVerified) {
+          try {
+            await sendEmailVerification(cred.user)
+            setVerifyMessage('We sent a verification link to your email.')
+          } catch {
+            setVerifyMessage(null)
+          }
+        }
       } else {
         await signInWithEmailAndPassword(auth, trimmed, password)
       }
@@ -60,13 +89,64 @@ function AccountPage({ user, onSignOut }) {
     }
   }
 
+  const handleGoogle = async () => {
+    setError(null)
+    setVerifyMessage(null)
+    setGoogleLoading(true)
+    try {
+      await signInWithPopup(auth, googleProvider)
+    } catch (err) {
+      setError(mapAuthError(err?.code))
+    } finally {
+      setGoogleLoading(false)
+    }
+  }
+
+  const handlePasswordReset = async () => {
+    const trimmed = email.trim()
+    if (!trimmed) {
+      setError('Enter your email above, then click “Forgot password?”.')
+      return
+    }
+    setError(null)
+    setResetMessage(null)
+    setResetLoading(true)
+    try {
+      await sendPasswordResetEmail(auth, trimmed)
+      setResetMessage('Check your inbox for a reset link.')
+    } catch (err) {
+      setError(mapAuthError(err?.code))
+    } finally {
+      setResetLoading(false)
+    }
+  }
+
+  const handleResendVerification = async () => {
+    const u = auth.currentUser
+    if (!u || u.emailVerified) return
+    setVerifyMessage(null)
+    setError(null)
+    setVerifyLoading(true)
+    try {
+      await sendEmailVerification(u)
+      setVerifyMessage('Verification email sent again.')
+    } catch (err) {
+      setError(mapAuthError(err?.code))
+    } finally {
+      setVerifyLoading(false)
+    }
+  }
+
   const handleSignOut = () => {
     onSignOut()
     setPassword('')
     setError(null)
+    setResetMessage(null)
+    setVerifyMessage(null)
   }
 
   if (user) {
+    const needsVerify = user.emailVerified === false
     return (
       <section className="page narrow">
         <h1>Account</h1>
@@ -76,6 +156,20 @@ function AccountPage({ user, onSignOut }) {
           <p>
             Signed in as <strong>{user.email}</strong>
           </p>
+          {needsVerify ? (
+            <div className="account-verify-banner">
+              <p>Your email is not verified yet.</p>
+              <button
+                className="button secondary"
+                type="button"
+                disabled={verifyLoading}
+                onClick={handleResendVerification}
+              >
+                {verifyLoading ? 'Sending…' : 'Resend verification email'}
+              </button>
+            </div>
+          ) : null}
+          {verifyMessage ? <p className="page-subtitle">{verifyMessage}</p> : null}
           <div className="details-actions">
             <button className="button secondary" type="button" onClick={handleSignOut}>
               Sign Out
@@ -102,6 +196,8 @@ function AccountPage({ user, onSignOut }) {
           onClick={() => {
             setMode('login')
             setError(null)
+            setResetMessage(null)
+            setVerifyMessage(null)
           }}
         >
           Sign In
@@ -114,11 +210,28 @@ function AccountPage({ user, onSignOut }) {
           onClick={() => {
             setMode('register')
             setError(null)
+            setResetMessage(null)
+            setVerifyMessage(null)
           }}
         >
           Register
         </button>
       </div>
+
+      <div className="account-oauth">
+        <button
+          className="button secondary account-google"
+          type="button"
+          disabled={googleLoading || loading}
+          onClick={handleGoogle}
+        >
+          {googleLoading ? 'Opening Google…' : 'Continue with Google'}
+        </button>
+      </div>
+
+      <p className="account-divider" aria-hidden="true">
+        or use email
+      </p>
 
       <form className="account-form" onSubmit={handleSubmit}>
         <label className="account-label">
@@ -142,8 +255,17 @@ function AccountPage({ user, onSignOut }) {
             required
           />
         </label>
+        {mode === 'login' ? (
+          <p className="account-forgot">
+            <button type="button" className="link-button" onClick={handlePasswordReset} disabled={resetLoading}>
+              {resetLoading ? 'Sending…' : 'Forgot password?'}
+            </button>
+          </p>
+        ) : null}
+        {resetMessage ? <p className="page-subtitle">{resetMessage}</p> : null}
+        {verifyMessage ? <p className="page-subtitle">{verifyMessage}</p> : null}
         {error ? <p className="account-error">{error}</p> : null}
-        <button className="button" type="submit" disabled={loading}>
+        <button className="button" type="submit" disabled={loading || googleLoading}>
           {loading ? 'Please wait…' : mode === 'register' ? 'Create account' : 'Sign In'}
         </button>
       </form>
