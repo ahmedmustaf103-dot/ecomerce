@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { firebaseConfigured } from '../firebase/config.js'
+import { firebaseConfigured } from '../firebase.js'
 
 function CartPage({
   cartItems,

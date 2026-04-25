@@ -37,3 +37,4 @@ server/data/users.json
 # Firebase service account keys (never commit)
 *-firebase-adminsdk-*.json
 serviceAccount*.json
+private/serviceAccount.local.json

@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { firebaseConfigured } from '../firebase/config.js'
+import { firebaseConfigured } from '../firebase.js'
 
 function OrdersPage({ orders, user }) {
   const subtitle = firebaseConfigured

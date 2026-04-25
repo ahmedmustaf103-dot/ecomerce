@@ -93,50 +93,64 @@ function HomePage({ onAddToCart, wishlist, onToggleWishlist }) {
       (a, b) => b.rating - a.rating || b.reviews - a.reviews || a.price - b.price,
     )
 
-    /** Pick up to `count` unique products from `candidates` (fresh dedupe each call — avoids empty sections with tiny catalogs). */
-    const pickUnique = (candidates, count) => {
-      const seen = new Set()
-      const picked = []
+    const usedProductIds = new Set()
+    const usedImages = new Set()
+
+    const isTaken = (product) =>
+      !product || usedProductIds.has(product.id) || usedImages.has(product.image)
+
+    const take = (candidates, count) => {
+      const out = []
       for (const product of candidates) {
-        if (!product || seen.has(product.id)) continue
-        picked.push(product)
-        seen.add(product.id)
-        if (picked.length >= count) break
+        if (isTaken(product)) continue
+        out.push(product)
+        usedProductIds.add(product.id)
+        usedImages.add(product.image)
+        if (out.length >= count) break
       }
-      return picked
+      return out
     }
 
-    const spotlightProduct = pickUnique(byTrending, 1)[0] ?? null
-    const heroStripProducts = pickUnique(byTrending, 3)
-    const heroSideTop = pickUnique(byNew.length > 0 ? byNew : byFeatured, 1)[0] ?? null
-    const heroSideBottom = pickUnique(byPremium.length > 0 ? byPremium : byFeatured, 1)[0] ?? null
+    const takeOne = (candidates) => take(candidates, 1)[0] ?? null
 
-    const trendingProducts = pickUnique(byTrending, 4)
+    // Allocate top-to-bottom so the same product / image never repeats on the page.
+    const spotlightProduct = takeOne(byTrending)
+    const heroStripProducts = take(byTrending, 3)
+    const heroSideTop = takeOne(byNew.length > 0 ? byNew : byFeatured)
+    const heroSideBottom = takeOne(byPremium.length > 0 ? byPremium : byFeatured)
+
+    const trendingProducts = take(byTrending, 4)
 
     const featuredByCategory = (() => {
       const picked = []
-      const seenIds = new Set()
       const usedCategories = new Set()
       for (const product of byFeatured) {
-        if (seenIds.has(product.id)) continue
-        if (usedCategories.has(product.category)) continue
+        if (isTaken(product) || usedCategories.has(product.category)) continue
         picked.push(product)
-        seenIds.add(product.id)
+        usedProductIds.add(product.id)
+        usedImages.add(product.image)
         usedCategories.add(product.category)
         if (picked.length >= 4) break
       }
       if (picked.length === 0) {
-        return pickUnique(byFeatured, 4)
+        return take(byFeatured, 4)
+      }
+      for (const product of byFeatured) {
+        if (picked.length >= 4) break
+        if (isTaken(product)) continue
+        picked.push(product)
+        usedProductIds.add(product.id)
+        usedImages.add(product.image)
       }
       return picked
     })()
 
-    const newArrivals = pickUnique(
+    const newArrivals = take(
       byNew.length > 0 ? byNew : byFeatured,
       4,
     )
-    const budgetProducts = pickUnique(byBudget.length > 0 ? byBudget : products, 4)
-    const premiumProducts = pickUnique(byPremium.length > 0 ? byPremium : products, 4)
+    const budgetProducts = take(byBudget.length > 0 ? byBudget : products, 4)
+    const premiumProducts = take(byPremium.length > 0 ? byPremium : products, 4)
 
     return {
       spotlightProduct,

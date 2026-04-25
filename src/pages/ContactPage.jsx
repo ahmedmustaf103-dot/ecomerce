@@ -1,6 +1,7 @@
 import { useState } from 'react'
 
-const CONTACT_EMAIL = 'hello@novastore.com'
+/** Set in `.env` to pre-fill the recipient (e.g. your real inbox). Otherwise mailto opens with an empty To line. */
+const contactInbox = import.meta.env.VITE_CONTACT_EMAIL?.trim() || ''
 
 function ContactPage() {
   const [name, setName] = useState('')
@@ -8,23 +9,37 @@ function ContactPage() {
   const [subject, setSubject] = useState('')
   const [message, setMessage] = useState('')
 
-  const handleSubmit = (event) => {
-    event.preventDefault()
-
+  const buildMailtoHref = () => {
     const mailSubject = encodeURIComponent(`[NovaStore] ${subject.trim() || 'Contact form'}`)
     const mailBody = encodeURIComponent(
       `Name: ${name.trim()}\nEmail: ${email.trim()}\n\n${message.trim()}`,
     )
-    window.location.href = `mailto:${CONTACT_EMAIL}?subject=${mailSubject}&body=${mailBody}`
+    const query = `subject=${mailSubject}&body=${mailBody}`
+    return contactInbox ? `mailto:${contactInbox}?${query}` : `mailto:?${query}`
+  }
+
+  const handleSubmit = (event) => {
+    event.preventDefault()
+    window.location.href = buildMailtoHref()
   }
 
   return (
     <section className="page narrow">
       <h1>Contact</h1>
       <p className="page-subtitle">
-        Send us a message. Submitting opens your email app with a pre-filled draft to{' '}
-        <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
-        —nothing is sent from this website.
+        Send us a message. Submitting opens your email app with a pre-filled draft
+        {contactInbox ? (
+          <>
+            {' '}
+            to <a href={`mailto:${contactInbox}`}>{contactInbox}</a>
+          </>
+        ) : (
+          <>
+            . Add your team&apos;s address in the <strong>To</strong> field, or set{' '}
+            <code>VITE_CONTACT_EMAIL</code> in <code>.env</code> so it is filled automatically.
+          </>
+        )}{' '}
+        Nothing is sent from this website until you send the message from your mail app.
       </p>
 
       <form className="contact-form" onSubmit={handleSubmit}>

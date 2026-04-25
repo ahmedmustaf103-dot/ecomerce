@@ -10,7 +10,7 @@ import AccountPage from './pages/AccountPage'
 import OrdersPage from './pages/OrdersPage'
 import FaqPage from './pages/FaqPage'
 import ContactPage from './pages/ContactPage'
-import { auth, db, firebaseConfigured } from './firebase/config.js'
+import { auth, db, firebaseConfigured } from './firebase.js'
 import './App.css'
 
 const CART_STORAGE_KEY = 'novastore-cart-items'
