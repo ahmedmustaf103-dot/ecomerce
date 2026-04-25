@@ -1,3 +1,6 @@
+const PLACEHOLDER_IMAGE =
+  'https://images.unsplash.com/photo-1560472354-b33ff0c44a43?auto=format&fit=crop&w=1200&q=80'
+
 /**
  * Normalizes a Firestore product document into the shape used by the React app.
  */
@@ -46,7 +49,10 @@ export function productFromFirestore(docId, data) {
     stock: typeof data.stock === 'number' ? data.stock : Number(data.stock),
     colors,
     sizes,
-    image: data.image,
+    image:
+      typeof data.image === 'string' && /^https?:\/\//i.test(data.image.trim())
+        ? data.image.trim()
+        : PLACEHOLDER_IMAGE,
     description: data.description,
   }
 }

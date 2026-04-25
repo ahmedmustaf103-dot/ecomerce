@@ -20,7 +20,7 @@ function ProductCard({ product, onAddToCart, onToggleWishlist, wishlist }) {
   const isWishlisted = wishlist.some((item) => item.id === product.id)
 
   return (
-    <article className="product-card" key={product.id}>
+    <article className="product-card">
       <Link className="product-clickable" to={`/products/${product.id}`}>
         <img src={product.image} alt={product.name} />
       </Link>
@@ -93,42 +93,50 @@ function HomePage({ onAddToCart, wishlist, onToggleWishlist }) {
       (a, b) => b.rating - a.rating || b.reviews - a.reviews || a.price - b.price,
     )
 
-    const used = new Set()
-    const takeUnique = (candidates, count) => {
+    /** Pick up to `count` unique products from `candidates` (fresh dedupe each call — avoids empty sections with tiny catalogs). */
+    const pickUnique = (candidates, count) => {
+      const seen = new Set()
       const picked = []
       for (const product of candidates) {
-        if (used.has(product.id)) continue
+        if (!product || seen.has(product.id)) continue
         picked.push(product)
-        used.add(product.id)
+        seen.add(product.id)
         if (picked.length >= count) break
       }
       return picked
     }
 
-    const spotlightProduct = takeUnique(byTrending, 1)[0] ?? null
-    const heroStripProducts = takeUnique(byTrending, 3)
-    const heroSideTop = takeUnique(byNew.length > 0 ? byNew : byFeatured, 1)[0] ?? null
-    const heroSideBottom = takeUnique(byPremium.length > 0 ? byPremium : byFeatured, 1)[0] ?? null
+    const spotlightProduct = pickUnique(byTrending, 1)[0] ?? null
+    const heroStripProducts = pickUnique(byTrending, 3)
+    const heroSideTop = pickUnique(byNew.length > 0 ? byNew : byFeatured, 1)[0] ?? null
+    const heroSideBottom = pickUnique(byPremium.length > 0 ? byPremium : byFeatured, 1)[0] ?? null
 
-    const trendingProducts = takeUnique(byTrending, 4)
+    const trendingProducts = pickUnique(byTrending, 4)
 
     const featuredByCategory = (() => {
       const picked = []
+      const seenIds = new Set()
       const usedCategories = new Set()
       for (const product of byFeatured) {
-        if (used.has(product.id)) continue
+        if (seenIds.has(product.id)) continue
         if (usedCategories.has(product.category)) continue
         picked.push(product)
-        used.add(product.id)
+        seenIds.add(product.id)
         usedCategories.add(product.category)
         if (picked.length >= 4) break
+      }
+      if (picked.length === 0) {
+        return pickUnique(byFeatured, 4)
       }
       return picked
     })()
 
-    const newArrivals = takeUnique(byNew, 4)
-    const budgetProducts = takeUnique(byBudget, 4)
-    const premiumProducts = takeUnique(byPremium, 4)
+    const newArrivals = pickUnique(
+      byNew.length > 0 ? byNew : byFeatured,
+      4,
+    )
+    const budgetProducts = pickUnique(byBudget.length > 0 ? byBudget : products, 4)
+    const premiumProducts = pickUnique(byPremium.length > 0 ? byPremium : products, 4)
 
     return {
       spotlightProduct,
@@ -230,8 +238,12 @@ function HomePage({ onAddToCart, wishlist, onToggleWishlist }) {
           ) : null}
 
           <div className="showcase-mini-grid">
-            {heroStripProducts.map((product) => (
-              <Link className="showcase-mini-card" key={`mini-${product.id}`} to={`/products/${product.id}`}>
+            {heroStripProducts.map((product, index) => (
+              <Link
+                className="showcase-mini-card"
+                key={`mini-${product.id}-${index}`}
+                to={`/products/${product.id}`}
+              >
                 <img src={product.image} alt={product.name} />
                 <div>
                   <p>{product.name}</p>
@@ -252,8 +264,8 @@ function HomePage({ onAddToCart, wishlist, onToggleWishlist }) {
         </div>
 
         <aside className="showcase-side">
-          {[heroSideTop, heroSideBottom].filter(Boolean).map((product) => (
-            <article className="showcase-side-card" key={`side-${product.id}`}>
+          {[heroSideTop, heroSideBottom].filter(Boolean).map((product, index) => (
+            <article className="showcase-side-card" key={`side-${product.id}-${index}`}>
               <Link to={`/products/${product.id}`}>
                 <img src={product.image} alt={product.name} />
               </Link>
@@ -280,9 +292,9 @@ function HomePage({ onAddToCart, wishlist, onToggleWishlist }) {
             ? Array.from({ length: 4 }).map((_, index) => (
                 <article className="product-card skeleton-card" key={`home-skeleton-${index}`} />
               ))
-            : trendingProducts.map((product) => (
+            : trendingProducts.map((product, index) => (
                 <ProductCard
-                  key={product.id}
+                  key={`trend-${product.id}-${index}`}
                   product={product}
                   onAddToCart={onAddToCart}
                   onToggleWishlist={onToggleWishlist}
@@ -298,9 +310,9 @@ function HomePage({ onAddToCart, wishlist, onToggleWishlist }) {
           <p className="page-subtitle">Top-rated picks from different categories.</p>
         </div>
         <div className="product-grid">
-          {(loading ? [] : featuredByCategory).map((product) => (
+          {(loading ? [] : featuredByCategory).map((product, index) => (
             <ProductCard
-              key={`featured-${product.id}`}
+              key={`featured-${product.id}-${index}`}
               product={product}
               onAddToCart={onAddToCart}
               onToggleWishlist={onToggleWishlist}
@@ -316,9 +328,9 @@ function HomePage({ onAddToCart, wishlist, onToggleWishlist }) {
           <p className="page-subtitle">Newest drops added to the catalog.</p>
         </div>
         <div className="product-grid">
-          {(loading ? [] : newArrivals).map((product) => (
+          {(loading ? [] : newArrivals).map((product, index) => (
             <ProductCard
-              key={`new-${product.id}`}
+              key={`new-${product.id}-${index}`}
               product={product}
               onAddToCart={onAddToCart}
               onToggleWishlist={onToggleWishlist}
@@ -352,9 +364,9 @@ function HomePage({ onAddToCart, wishlist, onToggleWishlist }) {
           <p className="page-subtitle">High-end products with standout features.</p>
         </div>
         <div className="product-grid">
-          {(loading ? [] : premiumProducts).map((product) => (
+          {(loading ? [] : premiumProducts).map((product, index) => (
             <ProductCard
-              key={`premium-${product.id}`}
+              key={`premium-${product.id}-${index}`}
               product={product}
               onAddToCart={onAddToCart}
               onToggleWishlist={onToggleWishlist}
