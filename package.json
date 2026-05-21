@@ -15,6 +15,7 @@
     "start": "NODE_ENV=production prisma db push && node server/index.js"
   },
   "dependencies": {
+    "@mlc-ai/web-llm": "^0.2.83",
     "@prisma/client": "^5.22.0",
     "cors": "^2.8.6",
     "express": "^5.2.1",

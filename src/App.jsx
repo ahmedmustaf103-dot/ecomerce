@@ -12,6 +12,7 @@ import FaqPage from './pages/FaqPage'
 import ContactPage from './pages/ContactPage'
 import { auth, db, firebaseConfigured } from './firebase.js'
 import './App.css'
+import Chatbot from './components/Chatbot.jsx'
 
 const CART_STORAGE_KEY = 'novastore-cart-items'
 const WISHLIST_STORAGE_KEY = 'novastore-wishlist'
@@ -474,6 +475,8 @@ function App() {
           <span className="toast-text">{toast.message}</span>
         </div>
       ) : null}
+
+      <Chatbot />
     </div>
   )
 }
